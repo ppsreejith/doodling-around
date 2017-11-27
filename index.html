@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <style>
+    body { margin:0;position:fixed;top:0;right:0;bottom:0;left:0; }
+  </style>
+</head>
+
+<body>
+  <script>
+    var width = screen.width;
+    var height = screen.height;
+    var blur = .8628;
+    var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height)
+   var g = svg.append("g") // for our zoom
+
+   const data = [];
+
+   function getDirection(x, y, x2, y2) {
+     const c = "c";
+     const cc = "cc";
+     const ydiff = Math.abs(y2-y);
+     const xdiff = Math.abs(x2-x);
+     if (x < 128) {
+       if (y < 128) {
+         //top left
+         return ydiff > xdiff ? cc: c;
+       } else {
+         //bottom left
+         return ydiff > xdiff ? c: cc;
+       }
+     } else {
+       if (y < 128) {
+         //top right
+         return ydiff > xdiff ? c: cc;
+       } else {
+         //bottom right
+         return ydiff > xdiff ? cc: c;
+       }
+     }
+   }
+   
+   function getInfo(d) {
+     const {x, y} = d.starting_point;
+     const x2 = d.ending_point.x;
+     const y2 = d.ending_point.y;
+     let direction = getDirection(x ,y, x2, y2);
+
+     const leftorright = x < 128?"Left":"Right";
+     const toporbottom = y < 128?"Top":"Bottom";
+     
+     data.push(leftorright + " " + toporbottom + "," + d.countrycode + "," + direction);
+   }
+
+   setTimeout(function() {
+     const result = data.join("\n");
+    var hiddenElement = document.createElement('a');
+
+    hiddenElement.href = 'data:attachment/text,' + encodeURI(result);
+    hiddenElement.target = '_blank';
+    hiddenElement.download = 'myFile.txt';
+   // hiddenElement.click();
+   }, 2000);
+    
+    d3.json('square2.json', function(err, drawings) {
+    // check the console to see the data format!
+      let _index = 0;
+      
+      drawings = drawings.filter(drawing => {
+        if (drawing.drawing.length == 1) {
+          return true
+        }
+        return false;
+//    drawing.drawing.shift();
+      //    drawing.drawing.length = 2;
+      let maxStrokeLength = 0;
+      _index++;
+      drawing.drawing.forEach(stroke => {
+        maxStrokeLength = Math.max(stroke[0].length, maxStrokeLength);
+      });
+      console.log("Index no", _index);
+      drawing.drawing = drawing.drawing.filter(stroke => {
+        if (stroke[0].length === maxStrokeLength) {
+          return false;
+        }
+        let x1 = stroke[0][0];
+        let x2 = stroke[0][stroke[0].length - 1];
+        let y1 = stroke[1][0];
+        let y2 = stroke[1][stroke[1].length - 1];
+        const dis = Math.sqrt((Math.pow(y2-y1, 2) + Math.pow(x2-x1, 2)));
+        if (dis < 22) {
+          console.log(x1, y1, x2, y2, dis);
+          return false;
+        }
+        console.log(stroke, dis);
+        return true;
+      });
+      return drawing.drawing.length < 5;
+      return true;
+      });
+
+      console.log("Total", drawings.length);
+
+    var line =  d3.line()
+    .x(function(d) { return 0 })
+    .y(function(d) { return 0 })
+
+    var line1 =  d3.line()
+    .x(function(d) { return d.x })
+    .y(function(d) { return d.y })
+
+      var spacing = 90;
+      const perrow = 12;
+    var groups = g.selectAll("g.drawing").data(drawings)
+    var groupsE = groups.enter().append("g")
+    .classed("drawing", true)
+    .attr("transform", function(d,i) {
+    // lay them out in a grid
+    var x = (i % perrow) * spacing;
+      var y = Math.floor(i/perrow) * spacing
+    return "translate(" + [x,y] + ")scale(0.25)" 
+    })
+    // we style the groups instead of the individual paths for a slight performance boost
+    .style("fill", "none")
+    .style("stroke", "#111")
+    .style("stroke-width", 5)
+                        .on("click", function(d, i) {
+                        })
+    //       .style("stroke-opacity", 0.5)
+var t = d3.transition().duration(3000).ease(d3.easeLinear);
+     
+      var pathsE = groupsE.selectAll("path.stroke").data(function(d) { 
+     const newDrawing = d.drawing.map(function(s) {
+    var points = []
+    s[0].forEach(function(x,i) {
+    points.push({x: x, y: s[1][i] })
+    })
+    return points;
+    })
+      d.starting_point = newDrawing[0][0];
+      d.ending_point = newDrawing[0][1];
+      getInfo(d);
+      return newDrawing;
+    }).enter().append("path").classed("stroke", true).attr("d",line)
+
+       d3.selectAll("path.stroke").transition(t).attr("d",line1)
+      
+      //pathsE.attr("d", line).transition(t).attr("fill","blue")
+
+      var circlesE = groupsE.selectAll(".circles").data(function(d) { 
+        // the data for each path is an array of points
+        // but it doesn't start that way
+        // the original format is [ [x0,x1,x2...], [y0,y1,y2...]]
+        return d.drawing.map(function(s) {
+          var points = []
+          points.push({
+            x: s[0][0],
+            y: s[1][0]
+          });
+          return points;
+        })
+      }).enter().append("circle").attr("cx",function(d){return d[0].x}).attr("cy",function(d){return d[0].y}).attr("r",20).attr("fill","red")
+      
+    var zoom = d3.zoom()
+    .scaleExtent([1/12, 4])
+    .on("zoom", function() {
+    g.attr("transform", d3.event.transform)
+    })
+    svg.call(zoom)
+    });
+    
+    var defs = svg.append("defs");
+    var filter = defs.append("filter").attr("id","gooeyCodeFilter");
+    filter.append("feGaussianBlur")
+    .attr("in","SourceGraphic")
+    .attr("stdDeviation",blur)
+    .attr("color-interpolation-filters","sRGB")
+    .attr("result","blur");
+    filter.append("feColorMatrix")
+    .attr("in","blur")
+    .attr("mode","matrix")
+    .attr("values","1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 18 -7")
+    .attr("result","gooey")
+    g.style("filter", "url(#gooeyCodeFilter)")
+
+  </script>
+</body>
+
+</html>
